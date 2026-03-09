@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Dashboard | RequestFlow</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,700;6..96,900&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #09090b; --bg-elevated: #18181b; --fg: #fafaf9; --muted: #71717a; --accent: #3b82f6; --accent-dim: rgba(59, 130, 246, 0.15); --success: #10b981; --success-dim: rgba(16, 185, 129, 0.15); --danger: #ef4444; --warning: #f59e0b; --card: #1c1c1f; --border: #27272a; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Space Grotesk', sans-serif; background: var(--bg); color: var(--fg); min-height: 100vh; overflow-x: hidden; }
+        .font-display { font-family: 'Bodoni Moda', serif; }
+        .noise-overlay { position: fixed; inset: 0; pointer-events: none; opacity: 0.035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); }
+        .grid-bg { background-image: radial-gradient(circle at 50% 0%, var(--accent-dim) 0%, transparent 50%), linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px); background-size: 100% 100%, 40px 40px, 40px 40px; }
+        .reveal { opacity: 0; transform: translateY(30px); transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
+        .reveal.visible { opacity: 1; transform: translateY(0); }
+        .queue-item { background: var(--card); border: 1px solid var(--border); border-radius: 16px; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
+        .queue-item:hover { border-color: var(--accent); transform: translateY(-4px); }
+        .sidebar-link { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 12px; color: var(--muted); transition: all 0.2s ease; cursor: pointer; }
+        .sidebar-link:hover { background: var(--card); color: var(--fg); }
+        .sidebar-link.active { background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+        .btn-primary { background: var(--accent); color: white; font-weight: 600; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; font-size: 14px;}
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--accent-dim); }
+        .btn-success { background: var(--success); color: white; font-weight: 600; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s; font-size: 14px;}
+        .btn-success:hover { transform: translateY(-2px); box-shadow: 0 5px 15px var(--success-dim); }
+        .view-section { display: none; }
+        .view-section.active { display: block; animation: fadeIn 0.4s ease forwards; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(100px); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 24px; opacity: 0; transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); z-index: 1001; }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    </style>
+</head>
+
+<body class="grid-bg">
+    <div class="noise-overlay"></div>
+
+    <div class="flex min-h-screen">
+        <aside class="hidden lg:flex flex-col w-64 border-r border-[var(--border)] bg-[var(--bg)]/80 backdrop-blur-xl p-6 sticky top-0 h-screen">
+            <div class="flex items-center gap-3 mb-10">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[var(--accent)] to-cyan-500 flex items-center justify-center text-white font-bold">W</div>
+                <span class="font-display text-xl font-bold">Worker</span>
+            </div>
+
+            <nav class="flex flex-col gap-2 flex-1">
+                <div class="sidebar-link active" data-target="available">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+                    Available Tasks
+                </div>
+                <div class="sidebar-link" data-target="mytasks">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    My Active Tasks
+                </div>
+                <div class="sidebar-link" data-target="history">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    Task History
+                </div>
+                <div class="sidebar-link" data-target="profile">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                    My Profile
+                </div>
+                <a href="/logout" class="sidebar-link mt-auto hover:text-red-400">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                    Logout
+                </a>
+            </nav>
+
+            <div class="pt-6 border-t border-[var(--border)]">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br from-gray-500 to-gray-400 flex items-center justify-center font-bold text-sm">W</div>
+                    <div>
+                        <div class="text-sm font-medium">{{ user.name }}</div>
+                        <div class="text-xs text-[var(--muted)]">Task Worker</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="flex-1 p-6 lg:p-10">
+            
+            <div id="view-available" class="view-section active">
+                <header class="mb-10 reveal visible">
+                    <h1 class="font-display text-4xl font-bold">Available Tasks</h1>
+                    <p class="text-[var(--muted)] mt-2">Approved requests ready to be worked on.</p>
+                </header>
+                <div id="availableQueue" class="space-y-4 grid grid-cols-1 lg:grid-cols-2 gap-4 reveal visible"></div>
+            </div>
+
+            <div id="view-mytasks" class="view-section">
+                <header class="mb-10 reveal visible">
+                    <h1 class="font-display text-4xl font-bold">My Active Tasks</h1>
+                    <p class="text-[var(--muted)] mt-2">Tasks you are currently working on.</p>
+                </header>
+                <div id="myTasksQueue" class="space-y-4 grid grid-cols-1 lg:grid-cols-2 gap-4 reveal visible"></div>
+            </div>
+
+            <div id="view-history" class="view-section">
+                <header class="mb-10 reveal visible">
+                    <h1 class="font-display text-4xl font-bold">Task History</h1>
+                    <p class="text-[var(--muted)] mt-2">A record of your successfully completed assignments.</p>
+                </header>
+                <div id="historyQueue" class="space-y-4 grid grid-cols-1 lg:grid-cols-2 gap-4 reveal visible"></div>
+            </div>
+
+            <div id="view-profile" class="view-section">
+                <header class="mb-10 reveal visible">
+                    <h1 class="font-display text-4xl font-bold">Settings</h1>
+                    <p class="text-[var(--muted)] mt-2">Manage your account information and password.</p>
+                </header>
+                <div class="max-w-xl bg-[var(--card)] p-8 rounded-2xl border border-[var(--border)] reveal visible">
+                    <form id="profileForm" class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Full Name</label>
+                            <input type="text" id="prof-name" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2 focus:border-[var(--accent)] outline-none transition-all" value="{{ user.name }}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Email Address</label>
+                            <input type="email" id="prof-email" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2 focus:border-[var(--accent)] outline-none transition-all" value="{{ user.email }}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Department</label>
+                            <input type="text" id="prof-dept" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2 focus:border-[var(--accent)] outline-none transition-all" value="{{ user.department }}">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">New Password (leave blank to keep current)</label>
+                            <input type="password" id="prof-pass" class="w-full bg-[var(--bg)] border border-[var(--border)] rounded-lg px-4 py-2 focus:border-[var(--accent)] outline-none transition-all">
+                        </div>
+                        <button type="submit" class="btn-primary w-full">Update Profile</button>
+                    </form>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <div id="toast" class="toast">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>
+        <span id="toastMessage">Action completed!</span>
+    </div>
+
+<script>
+        let workerRequests = [];
+
+        // --- NEW: Currency Formatter ---
+        const formatter = new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+        });
+
+        // Global Navigation Logic
+        document.querySelectorAll('.sidebar-link[data-target]').forEach(link => {
+            link.addEventListener('click', () => {
+                // UI Management
+                document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+                document.querySelectorAll('.view-section').forEach(s => s.classList.remove('active'));
+                
+                const target = link.getAttribute('data-target');
+                link.classList.add('active');
+                document.getElementById('view-' + target).classList.add('active');
+                
+                // Data Logic
+                if(target === 'history') {
+                    fetchHistory();
+                } else if (target === 'available' || target === 'mytasks') {
+                    fetchTasks();
+                }
+            });
+        });
+
+        // Fetch Data for Active/Available
+        async function fetchTasks() {
+            try {
+                const res = await fetch('/api/worker/requests');
+                if (res.ok) {
+                    workerRequests = await res.json();
+                    renderViews();
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Fetch Data for History
+        async function fetchHistory() {
+            try {
+                const res = await fetch('/api/worker/history');
+                if (res.ok) {
+                    const history = await res.json();
+                    const html = history.length === 0 
+                        ? '<div class="col-span-full text-center p-10 bg-[var(--card)] rounded-xl text-[var(--muted)]">No completed tasks yet.</div>'
+                        : history.map(req => taskCardHtml(req, 'none')).join('');
+                    document.getElementById('historyQueue').innerHTML = html;
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        // Action Handler
+        async function handleTaskAction(id, action) {
+            try {
+                const res = await fetch(`/api/worker/requests/${id}/${action}`, { method: 'POST' });
+                if (res.ok) {
+                    showToast(`Task ${action === 'claim' ? 'claimed' : 'completed'}!`);
+                    fetchTasks();
+                } else {
+                    const err = await res.json();
+                    showToast(err.error || 'Action failed');
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        // Render Active and Available
+        function renderViews() {
+            const available = workerRequests.filter(r => r.status === 'approved');
+            const active = workerRequests.filter(r => r.status === 'in_progress');
+
+            const availableHtml = available.length === 0 
+                ? '<div class="col-span-full text-center p-10 bg-[var(--card)] rounded-xl text-[var(--muted)]">No available tasks right now.</div>'
+                : available.map(req => taskCardHtml(req, 'claim')).join('');
+            
+            const activeHtml = active.length === 0 
+                ? '<div class="col-span-full text-center p-10 bg-[var(--card)] rounded-xl text-[var(--muted)]">You have no active tasks. Claim one!</div>'
+                : active.map(req => taskCardHtml(req, 'complete')).join('');
+
+            document.getElementById('availableQueue').innerHTML = availableHtml;
+            document.getElementById('myTasksQueue').innerHTML = activeHtml;
+        }
+
+        // --- UPDATED: Unified Task Card HTML to include Budget ---
+        function taskCardHtml(req, actionType) {
+            let btnHtml = '';
+            if(actionType === 'claim') {
+                btnHtml = `<button onclick="handleTaskAction('${req.id}', 'claim')" class="btn-primary w-full mt-4">Claim Task</button>`;
+            } else if (actionType === 'complete') {
+                btnHtml = `<button onclick="handleTaskAction('${req.id}', 'complete')" class="btn-success w-full mt-4">Mark Complete</button>`;
+            } else {
+                btnHtml = `<div class="mt-4 py-2 px-4 bg-[var(--success-dim)] text-[var(--success)] text-center rounded-lg font-bold text-xs uppercase tracking-widest">Completed</div>`;
+            }
+            
+            let attachmentHtml = '';
+            if(req.file_path) {
+                attachmentHtml = `<div class="mt-3 p-3 bg-[var(--bg)] rounded-lg text-xs"><a href="/uploads/${req.file_path}" target="_blank" class="text-[var(--accent)] hover:underline flex items-center gap-2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg> View Attachment</a></div>`;
+            }
+
+            // Calculate the budget display (default to $0 if not present)
+            const budgetDisplay = req.price ? formatter.format(req.price) : formatter.format(0);
+
+            return `
+            <div class="queue-item p-6 flex flex-col h-full border border-[var(--border)] rounded-xl bg-[var(--card)]">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-mono text-[var(--muted)]">${req.id}</span>
+                    <span class="text-xs uppercase px-2 py-1 rounded bg-[var(--bg)] text-[var(--muted)]">${req.type}</span>
+                </div>
+                <h3 class="font-display text-xl font-bold mb-2 text-[var(--fg)]">${req.title}</h3>
+                
+                <div class="mb-4">
+                    <span class="text-sm font-bold text-[var(--success)] bg-[var(--success-dim)] px-3 py-1 rounded-full border border-[var(--success)]/20">
+                        Budget: ${budgetDisplay}
+                    </span>
+                </div>
+
+                <p class="text-sm text-[var(--muted)] mb-4 flex-grow">${req.description}</p>
+                <div class="text-xs text-[var(--muted)] mb-2">Requested by: <strong>${req.user}</strong></div>
+                ${attachmentHtml}
+                ${btnHtml}
+            </div>`;
+        }
+
+        // Profile Update Handler
+        document.getElementById('profileForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = {
+                name: document.getElementById('prof-name').value,
+                email: document.getElementById('prof-email').value,
+                department: document.getElementById('prof-dept').value,
+                password: document.getElementById('prof-pass').value
+            };
+
+            const res = await fetch('/api/worker/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (res.ok) {
+                showToast('Profile updated successfully!');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast('Failed to update profile.');
+            }
+        });
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toastMessage').textContent = message;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchTasks();
+            const observer = new IntersectionObserver(e => e.forEach(entry => {
+                if(entry.isIntersecting) { entry.target.classList.add('visible'); observer.unobserve(entry.target); }
+            }));
+            document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+        });
+    </script>
+</body>
+</html>

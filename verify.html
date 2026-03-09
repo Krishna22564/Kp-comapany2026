@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Verify Email | RequestFlow</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,700&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg: #0a0a0b; --fg: #fafaf9; --muted: #71717a; --accent: #2dd4bf; --card: #1c1c1f; --border: #27272a; }
+    body { font-family: 'Space Grotesk', sans-serif; background: var(--bg); color: var(--fg); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+    .font-display { font-family: 'Bodoni Moda', serif; }
+    .noise-overlay { position: fixed; inset: 0; pointer-events: none; opacity: 0.035; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E"); }
+    .auth-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 40px; width: 100%; max-width: 420px; z-index: 10; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+    .form-input { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--fg); padding: 14px 20px; border-radius: 8px; font-family: inherit; margin-bottom: 20px; outline: none; transition: border-color 0.3s; text-align: center; font-size: 1.5rem; letter-spacing: 0.25em; }
+    .form-input:focus { border-color: var(--accent); }
+    .form-label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; text-align: center; }
+    .btn-primary { width: 100%; background: var(--accent); color: var(--bg); font-weight: 600; padding: 14px; border-radius: 8px; border: none; cursor: pointer; transition: transform 0.2s; }
+    .btn-primary:hover { transform: translateY(-2px); }
+  </style>
+</head>
+<body>
+  <div class="noise-overlay"></div>
+  <div class="auth-card">
+    <div class="text-center mb-8">
+      <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--accent)]/10 flex items-center justify-center text-[var(--accent)]">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+      </div>
+      <h1 class="font-display text-3xl font-bold mb-2">Check your email</h1>
+      <p class="text-[var(--muted)] text-sm">We've sent a 6-digit verification code to<br><strong class="text-[var(--fg)]">{{ email }}</strong></p>
+      <p class="text-xs text-yellow-500 mt-2">(For demo, look at your terminal console for the OTP!)</p>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+            <div class="{{ 'bg-red-500/10 border-red-500/50 text-red-400' if category == 'error' else 'bg-green-500/10 border-green-500/50 text-green-400' }} border p-3 rounded-lg text-sm mb-6 text-center">
+            {{ message }}
+            </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="/verify">
+      <label class="form-label">Verification Code</label>
+      <input type="text" name="otp" class="form-input font-mono" required maxlength="6" placeholder="000000">
+      <button type="submit" class="btn-primary mt-2">Verify & Continue</button>
+    </form>
+    
+    <div class="mt-6 text-center">
+        <a href="/login" class="text-sm text-[var(--muted)] hover:text-[var(--fg)] transition-colors">Back to login</a>
+    </div>
+  </div>
+</body>
+</html>
